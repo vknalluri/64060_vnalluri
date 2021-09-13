@@ -1,0 +1,68 @@
+---
+title: "Assignment 1 --- Telco Customer Churn"
+output: html_document
+DataSet Source: Kaggle
+---
+
+
+```{r}
+
+(.packages())
+# Import the dataset , previewview the dataset (First 6 observations only) and structure
+Cust_Churn <- read.csv(file = 'WA_Fn-UseC_-Telco-Customer-Churn.csv')
+head(Cust_Churn)
+str(Cust_Churn)
+
+# **Displaying Descriptive Statistics for a few Quantitative Variables**
+# Displaying Maximum and Minimum of Monthly charges and Maximum of Total charges
+
+min(Cust_Churn$MonthlyCharges)
+max(Cust_Churn$MonthlyCharges)
+max(Cust_Churn$TotalCharges,na.rm=TRUE)
+
+# Displaying mean of Customer Tenure in months and mean of Total Charges
+mean(Cust_Churn$tenure)
+
+# Displaying the Standard Deviation of Total Charges
+sd(Cust_Churn$TotalCharges,na.rm=TRUE)
+
+# Displaying the Descriptive Statistics for all quantitative variables at once
+summary(Cust_Churn)
+
+# **Displaying Descriptive Statistics for a few Categorical Variables**
+# Displaying Total Number of Female and Male Customers
+
+library('plyr')
+library('gmodels')
+
+
+# Displaying Total Number of Female and Male Customers
+count(Cust_Churn,'gender')
+
+# Displaying Total Number of cutsomers and their payment method proportionately
+CrossTable(Cust_Churn$gender, Cust_Churn$PaymentMethod)
+
+# Displaying Total Number of Female and Male Customers who have Dependents
+ftable(Cust_Churn$Dependents,Cust_Churn$gender)
+
+# Displaying Total Number of cutsomers with internet service and Churn
+ftable(Cust_Churn$InternetService,Cust_Churn$Churn,Cust_Churn$gender)
+
+
+# Adding new column Total life time charges(TLC) paid by the customer (Tenure*Monthly Charges)
+
+library('tidyverse')
+Cust_Churn_Modified<-Cust_Churn %>% mutate (TLC=tenure*MonthlyCharges)
+view(Cust_Churn_Modified)
+
+
+
+#Plotting Histogram on Monthly Charges
+hist(Cust_Churn$MonthlyCharges)
+
+#ScatterPlot for Tenure vs Total Charges
+
+plot(Cust_Churn$tenure, Cust_Churn$TotalCharges, main="Tenure and Total Charges",
+   xlab="Tenure ", ylab="TotalCharges ")
+
+```
