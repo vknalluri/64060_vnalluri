@@ -1,0 +1,194 @@
+---
+title: "KNN Classifier"
+output:html_document: null
+---
+
+
+## Importing the Data File
+
+## Importing UniversalBank.csv and printing the Summary Stats
+
+```{r}
+Mydata <- read.csv("UniversalBank.csv")
+summary(Mydata)
+```
+***
+## Data Preprocessing
+
+#Column Education is a categorical variable which is already factored. So we will not factor the column
+#We will create a back up (Mydata1) of the original data set (Mydata) by ignoring non required features (ID and ZIP code)
+#Since we are given the Test set (1 Row) we will devide the data set into validation set (40%) and Training set (60%)
+#We will use the preProcess function from the caret package to normalize the training and validation sets
+#Factor the dependent variable Personal.Loan
+#Install packages if necessary, uncomment before running or install it from the Console
+***
+
+```{r}
+#install.packages("fastDummies")
+library(fastDummies)
+#install.packages("dplyr")
+library(dplyr)
+#install.packages("caret")
+library(caret)
+#install.packages("caTools")
+library(caTools)
+
+
+Mydata1 <- select(Mydata,-1,-5) # Select a subset of variables
+Mydatadummy = dummy_cols(Mydata1, select_columns = 'Education')
+Mydatafinal = select(Mydatadummy, -6)
+
+
+set.seed(123)
+split = sample.split(Mydatafinal$Personal.Loan,SplitRatio = 0.6)
+training_set = subset(Mydatafinal, split == TRUE)
+val_set = subset(Mydatafinal, split == FALSE)
+
+norm.values <- preProcess(training_set[-7], method=c("center", "scale"))
+train.norm <- predict(norm.values, training_set[-7]) 
+valid.norm <- predict(norm.values, val_set[-7])
+
+summary(train.norm)
+summary(valid.norm)
+
+
+
+training_result <- factor(training_set[,7], levels = c(0,1), labels = c("Reject","Accept"))
+val_result <- factor(val_set[,7], levels = c(0,1), labels = c("Reject","Accept"))
+
+
+```
+***
+
+## Building the Model 
+
+I
+
+# 1.We will find out whetehr given customer with certain attributes will Reject or Accept the loan offer using KNN classifier and with k=1
+# 2.Age = 40, Experience = 10, Income = 84, Family = 2, CCAvg = 2, Education_1 = 0, Education_2 = 1, Education_3 = 0, Mortgage = 0, Securities Account = 0, CD Account = 0, Online = 1, and Credit Card = 1.
+
+***
+```{r}
+#install.packages("FNN")
+library(FNN)
+library(class)
+
+test<- read.csv("test1.csv", header = T, sep = ",", colClasses=c('numeric','numeric'))
+test.norm<- predict(norm.values, test[-7])
+
+classifier_knn <- knn(train.norm,test.norm,cl=training_result,k=1, prob = TRUE)
+classifier_knn
+
+```
+***
+
+## Finding best K value in KNN classifier
+II
+# 1. We will use  k= 1 to k = 70 (square root of total records in the data set) to find the best value of K
+
+***
+```{r}
+library(caret)
+accuracy.df <- data.frame(k = seq(1, 70, 1), accuracy = rep(0, 70))
+# compute knn for different k on validation.
+for(i in 1:70) {
+  knn.pred <- knn(train.norm, valid.norm, 
+                  cl = training_result, k = i)
+  accuracy.df[i, 2] <- confusionMatrix(knn.pred, val_result)$overall[1] 
+}
+accuracy.df
+optk <- which.max(accuracy.df$accuracy)
+optk
+```
+
+#Best K is 3
+
+***
+
+III
+Confusion Matrix for validation data using Optimal K value
+
+***
+
+```{r}
+library('gmodels')
+library('plyr')
+classifier_knn_opt <- knn(train.norm,valid.norm,cl=training_result,k=3, prob = TRUE)
+cm = CrossTable(val_result,classifier_knn_opt)
+```
+***
+
+IV
+Rejection or Acceptance of a custopmer based on best value K (3)
+
+***
+```{r}
+classifier_knn <- knn(train.norm,test.norm,cl=training_result,k=3, prob = TRUE)
+classifier_knn
+```
+***
+
+V
+
+1.Splitting the data into Train, Validationa and Test and normalizing
+
+***
+```{r}
+library(dplyr)
+set.seed(123)
+Test_Index = createDataPartition(Mydatafinal$Personal.Loan,p=0.2, list=FALSE)
+Test_Data = Mydatafinal[Test_Index,]
+TraVal_Data = Mydatafinal[-Test_Index,] # Validation and Training data
+Train_Index = createDataPartition(TraVal_Data$Personal.Loan,p=0.625, list=FALSE) # 62.5% of remaining data as training
+Train_Data = TraVal_Data[Train_Index,]
+Validation_Data = TraVal_Data[-Train_Index,] # rest as validation
+summary(Train_Data)
+summary(Validation_Data)
+summary(Test_Data)
+```
+
+
+```{r}
+norm.values <- preProcess(Train_Data[-7], method=c("center", "scale"))
+train.norm2 <- predict(norm.values, Train_Data[-7]) 
+valid.norm2 <- predict(norm.values, Validation_Data[-7])
+traval.norm2 <- predict(norm.values, TraVal_Data[-7])
+test.norm2 <- predict(norm.values, Test_Data[-7])
+summary(train.norm2)
+summary(valid.norm2)
+summary(test.norm2)
+
+training_result2 <- factor(Train_Data[,7], levels = c(0,1), labels = c("Reject","Accept"))
+val_result2 <- factor(Validation_Data[,7], levels = c(0,1), labels = c("Reject","Accept"))
+test_result2 <- factor(Test_Data[,7], levels = c(0,1), labels = c("Reject","Accept"))
+
+
+```
+
+## 2.Medelling KNN classifier and running Confusion Matrix (Validation vs Test and Training vs Test)
+```{r}
+library(class)
+classifier <- knn(valid.norm2,test.norm2,cl=val_result2,k=3, prob = TRUE)
+cm = CrossTable(test_result2,classifier)
+
+# in the above scenario accuracy is over 95% (95.4)
+
+#Training vs Test data confusion Matrix
+
+classifier2 <- knn(train.norm2,test.norm2,cl=training_result2,k=3, prob = TRUE)
+cm = CrossTable(test_result2,classifier2)
+
+# in the above scenario accuracy is over 96% (96.3)
+
+
+```
+***
+
+#In the first scenario (validation vs Test) since the validation data set has got 1500 rows the accuracy is 95.4%
+
+#where as, in the second scenario , accuracy is 96.3 %, perhaps, due to the fact that training data set has got 2500 rows of data.
+
+#Thus, we can say that accuracy of the model will improve if we have more data.
+
+
+***
