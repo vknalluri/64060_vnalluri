@@ -1,0 +1,173 @@
+---
+title: "Naive Bayes"
+output: html_document
+---
+
+Loading the Data and installing required packages & Libraries
+
+```{r}
+
+Mydata <- read.csv("UniversalBank.csv")
+#summary(Mydata)
+
+#install.packages("dplyr")
+library(dplyr)
+#install.packages("caret")
+library(caret)
+#install.packages("caTools")
+library(caTools)
+# install.packages("e1071")
+library(e1071)
+
+```
+
+***
+
+Factoring the required variables (because ftable function takes factored variables) and Dividing the dataset into 60% training and 40% validation sets
+
+However, even without factoring the algorithim would produce the same results, perhaps, as all the values are already kind of factored with 1s and 0s.
+
+```{r}
+
+Mydata$Personal.Loan = factor(Mydata$Personal.Loan)
+Mydata$Online = factor(Mydata$Online)
+Mydata$CreditCard = factor(Mydata$CreditCard)
+
+set.seed(1)
+
+split = sample.split(Mydata$Personal.Loan,SplitRatio = 0.6)
+training_set = subset(Mydata, split == TRUE)
+val_set = subset(Mydata, split == FALSE)
+
+```
+
+***
+
+## Questions:
+
+A. Create a pivot table for the training data with Online as a column variable, CC as a row
+variable, and Loan as a secondary row variable. 
+
+```{r}
+
+
+ftable(training_set$CreditCard,training_set$Personal.Loan,
+      training_set$Online, dnn = c("CreditCard", "Personal.Loan", "Online"))
+
+
+```
+
+***
+
+B. Consider the task of classifying a customer who owns a bank credit card and is actively using
+online banking services. Looking at the pivot table, what is the probability that this customer
+will accept the loan offer? [This is the probability of loan acceptance (Loan = 1) conditional on
+having a bank credit card (CC = 1) and being an active user of online banking services (Online
+= 1)]
+
+
+
+Lets say, P(Loan1) = P(L1), P(Loan0)= p(L0) , P(CC1)= P(CC1) and P(Online1) = P(O1)
+
+
+The solution can be written as P(L1)|P(CC1) , P(O1)
+
+Further, it can be simplified as , (P(L1) and P(CC1) and P(O1))/P(CC1) and P(O1)
+
+From A , the numerator will be 49 and the denominator will be 531 (482+49)
+
+Hence, solution will be = 49/531 or 9.22%
+
+***
+
+
+
+C. Create two separate pivot tables for the training data. One will have Loan (rows) as a
+function of Online (columns) and the other will have Loan (rows) as a function of CC.
+
+```{r}
+
+ftable(training_set$Personal.Loan,training_set$Online, dnn = c("Personal.Loan", "Online"))
+ftable(training_set$Personal.Loan,training_set$CreditCard, dnn = c("Personal.Loan", "CreditCard"))
+
+
+```
+***
+
+D. Compute the following quantities [P(A | B) means “the probability ofA given B”]:
+i. P(CC = 1 | Loan = 1) (the proportion of credit card holders among the loan acceptors)
+ii. P(Online = 1 | Loan = 1)
+iii. P(Loan = 1) (the proportion of loan acceptors)
+iv. P(CC = 1 | Loan = 0)
+v. P(Online = 1 | Loan = 0)
+vi. P(Loan = 0)
+
+## Answers:
+
+Lets say, P(Loan1) = P(L1), P(Loan0)= p(L0) , P(CC1)= P(CC1) and P(Online1) = P(O1)
+
+i.  Can be written as P(L1 and CC1)/P(L1) , so it would be , 92/(196+92) = 92/288 => 31.94%
+ii. Can be written as P(L1 and O1)/P(L1) , so it would be , 168/(120+168) = 168/288 => 58.33%
+iii.288/Total Number ===> 288/3000  ==> 9.6%
+iv. Can be written as P(L0 and CC1)/P(L0) , so it would be , 794/(1918+794) = 794/2712  => 29.27%
+v.  Can be written as P(L0 and O1)/P(L0) , so it would be , 1627/(1085+1627) = 1627/2712 => 59.99%
+vi. 2712/Total Number ===> 2712/3000 ==> 90.4%
+
+***
+
+E. Use the quantities computed above to compute the naive Bayes probability P(Loan = 1 | CC
+= 1, Online = 1).
+
+
+Lets say, P(Loan1) = P(L1), P(Loan0)= p(L0) , P(CC1)= P(CC1) and P(Online1) = P(O1)
+
+
+The solution can be written as P(L1)|P(CC1) , P(O1)
+
+
+Formula for the same using Naive Bayes theorm is P(CC1)|P(L1) * P(O1)|P(L1) * P(L1) / (P(CC1 and O1))
+
+Assumption: Naive Bayes theorm assumes that CC1 and O1 are independent given L1
+
+Can be further written as P(CC1)|P(L1) * P(O1)|P(L1) * P(L1) / ( (P(CC1)|P(L1) * P(O1)|P(L1) * P(L1) ) + (P(CC1)|P(L0) * P(O1)|P(L0) * P(L0) ) )
+
+Thus (we can get the values from " D" ) , = (92/288) * (168/288) * (288/3000) / (((92/288) * (168/288) * (288/3000)) + ((794/2712) * (1627/2712) * (2712/3000)))
+
+That will be ==> 10.12%
+
+
+***
+
+F.Compare this value with the one obtained from the pivot table in (B). Which is a more
+accurate estimate?
+
+
+Value from B is 9.22 and E is 10.12.
+
+Naive Bayes theorm assumes that CC1 and O1 are independent of each other given L1 . But in reality there may be several factors making an impact on each other and can be dependent ( we dont know). Thus naive Bayes method may not be as accurate as the direct method. 
+
+Hence value , which is 9.22,  from B may be more accurate.
+
+***
+
+
+G.Which of the entries in this table are needed for computing P(Loan = 1 | CC = 1, Online = 1)?
+Run naive Bayes on the data. Examine the model output on training data, and find the entry
+that corresponds to P(Loan = 1 | CC = 1, Online = 1). Compare this to the number you
+obtained in (E).
+
+
+```{r}
+model1 <- naiveBayes(Personal.Loan ~ ., data = training_set[c(10,13,14)])
+model1
+```
+
+***
+
+1. From the table we need only Index 13 and 14 (Online and Credit card). Hence using those two indexes for the model building.
+2. Values from the two predictors exactly match with what we have got in E and/or D (.3194, .5833 , .2927 and .5999 ) and P(L1) which is 0.096 and P(L0) which is 0.904 exactly match with A-priori probabilities.
+
+
+
+
+    
