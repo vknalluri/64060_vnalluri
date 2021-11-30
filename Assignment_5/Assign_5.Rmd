@@ -1,0 +1,167 @@
+title: "Hierarchical Clustering_Assign5"
+author: "Vamsi Nalluri"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#Clear the Workspace
+rm(list = ls())
+```
+
+***
+## 1. Importing Data
+
+Install the required packages, as required, and libraries. Load the Cereals.csv data file into Mydata Variable.
+
+Ensure that the dataset is located in the current working directory.
+```{r}
+Mydata <- read.csv("Cereals.csv")
+# Using Summary Function to check the data
+summary(Mydata)
+# Displaying the first 6 rows of the data
+head(Mydata)
+```
+
+***
+## 2. Data Pre-Processing
+
+Removing the missing values.
+```{r}
+#Find the columns that have missing values
+colSums(is.na(Mydata))
+#Remove the missing values and save the remaining data to Mydata1
+Mydata1 <- Mydata[complete.cases(Mydata),]
+```
+
+Create dummy variables for column shelf and then Scal&save the resulting data to Mydata2.
+```{r}
+#install.packages("fastDummies")
+library(fastDummies)
+
+Mydata2 <- dummy_columns(Mydata1, select_columns = "shelf")
+#Remove the original column shelf and the first three columns that are not required
+Mydata2 <- Mydata2[, -c(1,2,3,13)]
+Mydata2 <- scale(Mydata2)
+#Display the first 6 rows of the scaled data
+head(Mydata2)
+```
+
+## 3. Apply hierarchical clustering to the data using Euclidean distance to the normalized measurements.
+## How many clusters would you choose?
+```{r}
+#install.packages("cluster")
+library(cluster)
+#install.packages("tree")
+library(tree)
+
+# Calculating the distance between each point 
+ed <- dist(Mydata2, method = "euclidean")
+
+#Creating the Hierarchical Clustering objects and plotting Dendograms under different agglomeration methods
+hc1 <- hclust(ed, method = "single")
+plot(hc1, cex= 0.6, hang=-1)
+hc2 <- hclust(ed, method = "complete")
+plot(hc2, cex= 0.6, hang=-1)
+hc3 <- hclust(ed, method = "average")
+plot(hc3, cex= 0.6, hang=-1)
+#Research reveals that ward.D2 is more accurate comapared to ward.D, hence, using ward.D2
+hc4 <- hclust(ed, method = "ward.D2")
+plot(hc4, cex= 0.6, hang=-1)
+
+
+#Calculating agglomerate coefficients under different agglomeration methods using Agnes function
+hcs <- agnes(Mydata2, method= "single")
+hcc <- agnes(Mydata2, method= "complete")
+hca <- agnes(Mydata2, method= "average")
+hcw <- agnes(Mydata2, method= "ward")
+hcs$ac
+hcc$ac
+hca$ac
+hcw$ac
+```
+
+***
+Ward methid produced the highest agglomerate coefficient (0.9045198) and as such it is the best method. Generally, agglomerate coefficient of anything above 0.85 is considered to be a good fit for the model.
+
+One technique to measure the optimum number of clusters is to extend all the horizontal lines and identify & measure the largest vertical line that doesnt cross any horizontal lines. Further, draw a horizontal line on the identified vertical line and measure the number of times the horizontalline touches all the vertical lines. The number of times it touches the vertical lines would be the optimal number of clusters.
+
+Another technique is to , as per the business needs, identify a threshold limit on Y axes and draw the horizontal line and measuring the number of times it touches all the vertical lines, giving us the optimal number of clusters.
+
+In my opinion , the first option doesnt produce consistant results and in the problem we havent been given any threshold limit. Hence we would use kmeans to decide the optimal number of clusters.
+
+***
+### Caculating the optimal number of clusters based on kmeans.
+```{r}
+set.seed(10)
+wss <- vector()
+for(i in 1:10) wss[i] <- sum(kmeans(Mydata2,i)$withinss)
+plot(1:10, wss , type = "b" , main = paste('Clusters') , xlab = "Number of Clusters", ylab="wss")
+wss
+```
+
+***
+From the above graph and wss data, we can see that the optimal number of clusters are at 4 as the distance between clusters is decreasing at a slower pace from cluster number 4 and onwards.
+
+So the optimal number of clusters based on Kmeans are 4.
+
+***
+## Comment on the structure of the clusters and on their stability. 
+
+We will remove a portion of the records and then recalculate the optimal clusters from the dendogram and also using kmeans on the remaining data to check the stability.
+```{r}
+set.seed(10)
+#checking the stability after removing first 15 records
+Data1 <- Mydata2[1:15,] 
+Data2 <- Mydata2[16:74,]
+hcwdata2 <- agnes(Data2, method= "ward")
+hcwdata2$ac  
+# Creating the dendogram on the new data
+ed1 <- dist(Data2, method = "euclidean")
+hc5 <- hclust(ed1, method = "ward.D2")
+plot(hc5, cex= 0.6, hang=-1)
+# plotting the dendogram with new optimal number of clusters
+rect.hclust(hc5, k=4)
+
+# calculating optimal number based on kmeans elbow method for the new data
+set.seed(10)
+wss2 <- vector()
+for(i in 1:10) wss2[i] <- sum(kmeans(Data2,i)$withinss)
+plot(1:10, wss2 , type = "b" , main = paste('Clusters') , xlab = "Number of Clusters", ylab="wss")
+wss2
+```
+
+***
+Though the coefficient of agglomerate has slightly changed , yet its over 0.85. We can see from kmeans elbow method and wss data that the optmal number of clusters have not changed from 4 even after removing over 20% of the total data. Thus, we can say that the structure is stable, overall. 
+
+***
+## The elementary public schools would like to choose a set of cereals to include in their daily cafeterias.
+
+We should consider the scaled data here as there are some outliers for some variables and the range of some variables is high , impacting the outcome , as one can see from the boxplot.
+```{r}
+#install.packages("dplyr")
+library(dplyr)
+#install.packages("factoextra")
+library(factoextra)
+
+#Displaying the boxplot
+boxplot(Mydata[,-c(1,2,3)])
+
+#Cutting the tree into clusters and identifying each row of data and the respective cluster number
+clus <- cutree(hc4, k = 4)
+clus
+#adding the  membership column (clusters) to the data
+Cclusters <- cbind(Mydata2, clus)
+Cclusters <- as.data.frame(Cclusters)
+
+# Plotting the clusters and the data
+fviz_cluster(list(data= Cclusters, cluster = clus))
+
+#Displaying the scaled data with the corresponding cluster number
+Cclusters %>% group_by(clus) %>% summarize_if(is.numeric, sum, na.rm=TRUE)
+```
+***
+The decision to go with certain cluster largely depends on many personal factors such as how one views the nutrition information.
+
+Personally, I would go with cluster 2 as it offers high amount of protein which is required for immunity building and good amount of fiber that keeps healthy bowl movement. Besides, cluster 2 has got some vitamin component and is the best cluster from that perspective among all. Even potassium contnent is highest among all. Of course, it has got relatively high amounts of sugars and calories,yet, making it the ideal cluster.
+
