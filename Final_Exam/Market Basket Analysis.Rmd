@@ -1,0 +1,172 @@
+---
+title: "Market Basket Analysis"
+author: "Vamsi Nalluri"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#Clear the Workspace
+rm(list = ls())
+```
+
+## Install the required packages and libraries , as required,  at appropriate chunks.
+
+***
+## 1. Importing Data
+
+Load the Online Retail.csv data file into Mydata Variable. Ensure that the dataset is located in the current working directory.
+```{r}
+Mydata <- read.csv("Online Retail.csv")
+#Using Summary Function to check the descriptive statistics
+summary(Mydata)
+#Displaying the first 6 rows of the data
+head(Mydata)
+```
+
+***
+If we carefully inspect the Mydata variable , we see that InvoiceNo includes cancelled transactions where in the InvoiceNo is preceded with a 'c'. We need to remove those cancelled transactions from the data set to get accurate outcomes (Apiori Rules for the item sets)
+
+Further,both Description and Country columns are of categorical variables and need to be factored in.
+
+There are over 135,000 customer IDs are missing , however, we would not remove them from the data set as the outcome is related to items not the customer profiles (Content based recommender system vs Collaborative system)
+
+***
+
+## 2. Data Pre-Processing
+
+Removing the cancelled Transactions from the Dataset.
+```{r}
+#install.packages("stringr")
+library(stringr)
+
+#Calculate the number of cancelled transactions
+length(which(substr(str_to_upper(Mydata$InvoiceNo),1,1) == "C")) 
+#Remove the Cancelled transactions and save the remaining transactions to Mydata1
+Mydata1 <- Mydata[-which(substr(str_to_upper(Mydata$InvoiceNo),1,1) == "C"),] #just thus active transactions
+nrow(Mydata1)
+```
+
+***
+After Removing the cancelled transactions , the dataset has 532621 records as against the original 541909 records.
+
+***
+
+Factoring Description and Country columns 
+```{r}
+#install.packages("dplyr")
+library(dplyr)
+
+Mydata1 <- Mydata1 %>% mutate(Description = as.factor(Description))
+
+Mydata1 <- Mydata1 %>% mutate(Country = as.factor(Country))
+glimpse(Mydata1)
+```
+
+## 3. Exploratory Data Analysis
+
+Plot the graph that shows the top 10 selling items
+```{r}
+#install.packages("ggplot2")
+library(ggplot2)
+
+Mydata2 <- Mydata1 %>% group_by(StockCode, Description) %>% dplyr::summarise(count = n()) %>% arrange(desc(count))
+Mydata2 <- head(Mydata2, n=10)
+Mydata2 %>% ggplot(aes(x=reorder(Description,count),y=count))+geom_bar(stat="identity",fill="purple")+coord_flip()
+```
+
+***
+We can see that some of the top selling items are WHITE HANGING HEART T-LIGHT HOLDER , 	JUMBO BAG RED RETROSPOT and REGENCY CAKESTAND 3 TIER.
+
+***
+
+## 4. Association Rules
+
+***
+If we look at the dataset carefully, we can see that invoice numbers are duplicated for wach item in that invoice.
+Inorder to run the association rules we need to have an invoice number with all the corresponding transaction items in one row (We need to transform the tabular format to transacrtions format).
+
+Split the dataset by Invoice number and date and capture the items for the corresponding invoice number and then remove the Invoice number and Invoice Date as we need only item sets to generate the association rules.
+```{r}
+#install.packages("plyr")
+library(plyr)
+
+Mydata3 <- ddply(Mydata1, c("InvoiceNo","InvoiceDate"), function(df1)paste(df1$Description, collapse = ","))
+#Removing InvoiceNO and InvoiceDate columns
+Mydata3$InvoiceNo <- NULL
+Mydata3$InvoiceDate <- NULL
+colnames(Mydata3) <- c("item sets")
+# We will convert the transactions and save it as a csv (File will be saved on to the working directory)
+write.csv(Mydata3,"MBA.csv", quote = FALSE, row.names = FALSE)
+```
+
+Reading the Transactions from the CSV file using arules package as a basket of transactions in a matrix format (sparse)
+```{r}
+#install.packages("arules")
+library(arules)
+
+trans <- read.transactions("MBA.csv",quote = "", format = 'basket', sep=',')
+summary(trans)
+```
+
+***
+We can notice that there are a total of 22107 transactions and 4239 items that constitute the transactions. We can also notice that most frequent items match with what we have got earlier with ggplot2 function.
+
+It also infers that 1 item appears in 2260 transactions and 2 items appear in 849 transactions etc.There are many items that appear in only one transaction.
+
+***
+
+Run the Item frequency plot to determine, approximately , the initial support level in the absence of any business rules.
+```{r}
+#install.packages("RColorBrewer")
+library(RColorBrewer)
+
+# Create an item frequency plot for the top 20 items
+itemFrequencyPlot(trans,topN=20,type="relative",col=brewer.pal(8,'Dark2'), main="Relative Item Frequency Plot")
+```
+
+***
+From the above plot it can be noted that top 20 items have a frequency of about 5%. That means they are bought by the customers at about 5% of the times , hence many items would be well below 5%. In order to generate reasonable number of rules we need to have a support level of lessthan 5%.
+
+***
+
+Lets generate the apriori rules based on a support of 1% and confidence of 70%.
+```{r}
+# Min Support as 0.001, confidence as 0.8.
+rules <- apriori(trans, parameter = list(supp=0.01, conf=0.7))
+summary(rules)
+```
+
+***
+166 rules are generated. Rules may change (increase or decrease) based on the threshold levels (confidence and support) or based on what business managers feel appropriate. Out of 166 rules there are 42 rules for an item length or item set of 2 products in a transaction.
+
+***
+Lets see the top 20 rules 
+```{r}
+inspect(rules[1:20])
+```
+
+***
+## Interpretation:
+
+Note that the rules in the tabular format above are not sorted either by lift or confidence to show variety of data.
+
+For example , looking at row number 15 in the table,  because confidence is 1 for the itemset , there is a 100% probability that the customer who buys SET 3 RETROSPOT TEA will also buy SUGAR. Further , lift of 51.41 indicates that the customer purchasing the 2 items together is 51 times higher compared to buying the second item alone.
+
+Based on the understanding of these rules retailers can appropriately display/recommend/advertise the items to the customers.
+
+***
+
+## Graphical Representation of the top 10 rules
+```{r}
+#install.packages("arulesViz")
+library(arulesViz)
+
+top10subRules <- head(rules, n = 10, by = "confidence")
+
+plot(top10subRules, method = "graph",  engine = "htmlwidget")
+```
+***
+As we can see above head of the arrow represents rhs of the product and tail of the arrow represents the lhs of the product. Further, bigger bubble represents higher support and the intensity of the colour represents the higher lift.
+
